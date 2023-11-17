@@ -19,4 +19,8 @@
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <None Include=".clang-format" />
+    <None Include="vcpkg.json" />
+  </ItemGroup>
 </Project>

@@ -1,0 +1,11 @@
+﻿{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "chain-util",
+  "version": "0.0.1",
+  "dependencies": [
+    {
+      "name": "boost-system",
+      "platform": "x64 and windows and static"
+    }
+  ]
+}

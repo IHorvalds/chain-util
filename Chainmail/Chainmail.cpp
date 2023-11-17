@@ -7,6 +7,7 @@
 #include <numeric>
 #include <ranges>
 #include <string>
+#include <format>
 #include <Windows.h>
 #include <tlhelp32.h>
 
@@ -14,41 +15,41 @@ namespace po = boost::program_options;
 
 bool run_next(const std::string& cmd)
 {
-    STARTUPINFOA si;
+    STARTUPINFOA        si;
     PROCESS_INFORMATION pi;
 
     ZeroMemory(&si, sizeof(si));
     si.cb = sizeof(si);
     ZeroMemory(&pi, sizeof(pi));
 
-    if (!CreateProcessA(NULL,
-        (LPSTR)cmd.c_str(),
-        NULL,
-        NULL,
-        FALSE,
-        0,
-        NULL,
-        NULL,
-        &si,
-        &pi))
+    char* csCmd = (char*) malloc(cmd.length() + 1);
+
+    if (!csCmd)
     {
-        DWORD dwErr = GetLastError();
+        std::cerr << "Failed to allocate memory";
+        return false;
+    }
+
+    strcpy(csCmd, cmd.c_str());
+
+    if (!CreateProcessA(NULL, csCmd, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi))
+    {
+        DWORD dwErr     = GetLastError();
         LPSTR errorText = NULL;
 
         FormatMessageA(
             // use system message tables to retrieve error text
             FORMAT_MESSAGE_FROM_SYSTEM
-            // allocate buffer on local heap for error text
-            | FORMAT_MESSAGE_ALLOCATE_BUFFER
-            // Important! will fail otherwise, since we're not 
-            // (and CANNOT) pass insertion parameters
-            | FORMAT_MESSAGE_IGNORE_INSERTS,
-            NULL,    // unused with FORMAT_MESSAGE_FROM_SYSTEM
-            dwErr,
-            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-            (LPSTR)&errorText,  // output 
-            0, // minimum size for output buffer
-            NULL);   // arguments - see note 
+                // allocate buffer on local heap for error text
+                | FORMAT_MESSAGE_ALLOCATE_BUFFER
+                // Important! will fail otherwise, since we're not
+                // (and CANNOT) pass insertion parameters
+                | FORMAT_MESSAGE_IGNORE_INSERTS,
+            NULL, // unused with FORMAT_MESSAGE_FROM_SYSTEM
+            dwErr, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+            (LPSTR) &errorText, // output
+            0,                  // minimum size for output buffer
+            NULL);              // arguments - see note
 
         if (errorText != NULL)
         {
@@ -72,40 +73,41 @@ bool run_next(const std::string& cmd)
 /// Wait for processes by handles
 bool wait_for_processes(const std::vector<HANDLE>& handles)
 {
-    bool bResult = true;
-    auto processes = handles | std::views::transform(GetProcessId) | std::views::transform([](const DWORD dw) { return std::to_string((unsigned long)dw); });
+    bool bResult   = true;
+    auto processes = handles | std::views::transform(GetProcessId) |
+                     std::views::transform(static_cast<std::string (*)(DWORD)>(std::to_string));
 
     std::cout << "Waiting on processes: "
-        << std::accumulate(processes.begin(), processes.end(), std::string(""), [](const std::string& a, const std::string& b)
-            {
-                if (a.empty())
-                {
-                    return b;
-                }
+              << std::accumulate(processes.begin(), processes.end(), std::string(""),
+                                 [](const std::string& a, const std::string& b) {
+                                     if (a.empty())
+                                     {
+                                         return b;
+                                     }
 
-                if (b.empty())
-                {
-                    return a;
-                }
-                return a + ", " + b;
-            })
-        << "...\n";
+                                     if (b.empty())
+                                     {
+                                         return a;
+                                     }
+                                     return a + ", " + b;
+                                 })
+              << "...\n";
 
-    DWORD dwWaitResult = WaitForMultipleObjects((DWORD)handles.size(), handles.data(), TRUE, INFINITE);
+    DWORD dwWaitResult = WaitForMultipleObjects((DWORD) handles.size(), handles.data(), TRUE, INFINITE);
 
     try
     {
         if ((dwWaitResult >= WAIT_ABANDONED_0 && dwWaitResult <= (WAIT_ABANDONED_0 + handles.size() - 1)) ||
             dwWaitResult == WAIT_TIMEOUT || dwWaitResult == WAIT_FAILED)
         {
-            throw std::string("Wait for processes failed.");
+            throw std::runtime_error("Wait for processes failed.");
         }
 
         std::cout << "Finished waiting for processes.\n";
     }
-    catch (const std::string& sv)
+    catch (const std::runtime_error& error)
     {
-        std::cerr << sv << std::endl;
+        std::cerr << error.what() << std::endl;
         bResult = false;
     }
 
@@ -114,28 +116,27 @@ bool wait_for_processes(const std::vector<HANDLE>& handles)
 
 std::vector<HANDLE> get_process_handles_by_glob(const std::vector<std::string>& globs)
 {
-    HANDLE hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    HANDLE              hSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     std::vector<HANDLE> handles;
 
     if (hSnap == INVALID_HANDLE_VALUE)
     {
-        DWORD dwErr = GetLastError();
+        DWORD dwErr     = GetLastError();
         LPSTR errorText = NULL;
 
         FormatMessageA(
             // use system message tables to retrieve error text
             FORMAT_MESSAGE_FROM_SYSTEM
-            // allocate buffer on local heap for error text
-            | FORMAT_MESSAGE_ALLOCATE_BUFFER
-            // Important! will fail otherwise, since we're not 
-            // (and CANNOT) pass insertion parameters
-            | FORMAT_MESSAGE_IGNORE_INSERTS,
-            NULL,    // unused with FORMAT_MESSAGE_FROM_SYSTEM
-            dwErr,
-            MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-            (LPSTR)&errorText,  // output 
-            0, // minimum size for output buffer
-            NULL);   // arguments - see note 
+                // allocate buffer on local heap for error text
+                | FORMAT_MESSAGE_ALLOCATE_BUFFER
+                // Important! will fail otherwise, since we're not
+                // (and CANNOT) pass insertion parameters
+                | FORMAT_MESSAGE_IGNORE_INSERTS,
+            NULL, // unused with FORMAT_MESSAGE_FROM_SYSTEM
+            dwErr, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+            (LPSTR) &errorText, // output
+            0,                  // minimum size for output buffer
+            NULL);              // arguments - see note
 
         if (errorText != NULL)
         {
@@ -160,16 +161,15 @@ std::vector<HANDLE> get_process_handles_by_glob(const std::vector<std::string>& 
 
     do
     {
-        char szProcName[256];
-        std::wcstombs(szProcName, pe.szExeFile, 256);
+        std::string procName(pe.szExeFile);
 
         for (auto& sGlob : globs)
         {
             std::regex reg(sGlob, std::regex_constants::ECMAScript | std::regex_constants::icase);
 
-            std::cmatch match;
+            std::smatch match;
 
-            if (std::regex_match(szProcName, match, reg))
+            if (std::regex_match(procName, match, reg))
             {
                 HANDLE hProc = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_INFORMATION, FALSE, pe.th32ProcessID);
                 if (hProc != NULL)
@@ -178,11 +178,7 @@ std::vector<HANDLE> get_process_handles_by_glob(const std::vector<std::string>& 
                 }
                 else
                 {
-                    const wchar_t szwErr[] = L"Failed to open process ";
-                    char szErr[256];
-
-                    std::wcstombs(szErr, szwErr, 256);
-                    std::cerr << szErr << szProcName << std::endl;
+                    std::cerr << std::format("Failed to open process {}\n", procName);
                 }
             }
         }
@@ -191,7 +187,7 @@ std::vector<HANDLE> get_process_handles_by_glob(const std::vector<std::string>& 
     return handles;
 }
 
-std::vector<HANDLE> get_process_handles_by_pid(const std::vector<unsigned long >& pids)
+std::vector<HANDLE> get_process_handles_by_pid(const std::vector<unsigned long>& pids)
 {
     std::vector<HANDLE> handles;
 
@@ -204,10 +200,7 @@ std::vector<HANDLE> get_process_handles_by_pid(const std::vector<unsigned long >
         }
         else
         {
-            char szErrBuff[256];
-
-            sprintf_s(szErrBuff, "Failed to open process %ul\n", pid);
-            std::cerr << szErrBuff;
+            std::cerr << std::format("Failed to open process {}\n", pid);
         }
     }
 
@@ -219,7 +212,7 @@ bool close_handles(const std::vector<HANDLE>& handles)
     bool bResult = true;
     for (auto& hProc : handles)
     {
-        bResult &= (bool)CloseHandle(hProc);
+        bResult &= (bool) CloseHandle(hProc);
     }
 
     return bResult;
@@ -228,11 +221,11 @@ bool close_handles(const std::vector<HANDLE>& handles)
 int main(int argc, char* argv[])
 {
     po::options_description options("Available arguments");
-    options.add_options()
-        ("help,h", po::value<std::string>(), "Show this help message")
-        ("pids,ps", po::value<std::vector<unsigned long>>(), "PIDs of processes to wait for")
-        ("procs", po::value<std::vector<std::string>>(), "Names of processes to wait for. Supports globbing")
-        ("next,n", po::value<std::string>(), "Command to run after waited processes exit");
+    options.add_options()("help,h", "Show this help message")("pids,ps", po::value<std::vector<unsigned long>>(),
+                                                              "PIDs of processes to wait for")(
+        "procs", po::value<std::vector<std::string>>(), "Names of processes to wait for. Supports globbing")(
+        "delay,d", po::value<long>()->default_value(0L), "Delay, in seconds, before running the next command")(
+        "next,n", po::value<std::string>(), "Command to run after waited processes exit");
 
     po::variables_map var_map;
 
@@ -252,7 +245,6 @@ int main(int argc, char* argv[])
             std::cout << options << std::endl;
             return -1;
         }
-
 
         std::vector<HANDLE> handles;
         if (var_map.count("pids"))
@@ -274,13 +266,23 @@ int main(int argc, char* argv[])
             return -1;
         }
 
+        if (var_map.count("delay"))
+        {
+            long delay = var_map["delay"].as<long>();
+            if (delay > 0)
+            {
+                std::cout << std::format("Sleeping for {} second(s)\n", delay);
+                Sleep((DWORD) delay * 1000);
+            }
+        }
+
         return run_next(var_map["next"].as<std::string>()) ? 0 : -1;
     }
     catch (std::exception& e)
     {
-        std::cerr << "Error: " << e.what() << "\n";
+        std::cerr << std::format("Error: {}\n", e.what());
     }
-    catch (...) 
+    catch (...)
     {
         std::cerr << "Exception of unknown type!\n";
     }

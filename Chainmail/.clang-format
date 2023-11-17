@@ -1,0 +1,22 @@
+---
+BasedOnStyle: Microsoft
+AccessModifierOffset: '-4'
+AlignConsecutiveAssignments: true
+AlignConsecutiveDeclarations: true
+AllowShortBlocksOnASingleLine: 'false'
+AllowShortFunctionsOnASingleLine: InlineOnly
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLambdasOnASingleLine: Empty
+AllowShortLoopsOnASingleLine: 'false'
+AlwaysBreakTemplateDeclarations: Yes
+DerivePointerAlignment: 'false'
+PointerAlignment: Left
+SortIncludes: 'false'
+SpaceAfterCStyleCast: 'true'
+SpaceAfterLogicalNot: 'false'
+SpaceAfterTemplateKeyword: 'true'
+SpaceBeforeCpp11BracedList: 'true'
+TabWidth: '4'
+UseTab: Never
+
+...
